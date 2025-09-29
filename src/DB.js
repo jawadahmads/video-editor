@@ -1,13 +1,12 @@
 const fs = require("node:fs");
 
+const videosPath = "./data/videos";
 const usersPath = "./data/users";
 const sessionsPath = "./data/sessions";
-const videosPath = "./data/videos";
 
 class DB {
   constructor() {
     this.videos = JSON.parse(fs.readFileSync(videosPath, "utf8"));
-
     /*
      A sample object in this users array would look like:
      { id: 1, name: "Liam Brown", username: "liam23", password: "string" }
@@ -28,7 +27,6 @@ class DB {
   }
 
   save() {
-    // take the obj store it into the path
     fs.writeFileSync(videosPath, JSON.stringify(this.videos));
     fs.writeFileSync(usersPath, JSON.stringify(this.users));
     fs.writeFileSync(sessionsPath, JSON.stringify(this.sessions));

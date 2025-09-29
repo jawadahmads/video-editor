@@ -1,10 +1,1 @@
-[
-  {
-    "id": 0,
-    "videoId": "9d7a2ee6",
-    "extenstion": "mp4",
-    "userId": 1,
-    "extractedAudio": false,
-    "resizes": {}
-  }
-]
+[{"id":0,"videoId":"ef49a0b5","name":"cideo","extension":"mp4","dimensions":{"width":360,"height":640},"userId":1,"extractedAudio":false,"resizes":{}}]
