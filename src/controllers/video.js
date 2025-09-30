@@ -5,6 +5,13 @@ const { pipeline } = require("node:stream/promises");
 const util = require("../../lib/util");
 const DB = require("../DB");
 const FF = require("../../lib/FF");
+const JobQueue = require("../../lib/jobQueue.js");
+const cluster = require("node:cluster");
+
+let jobs;
+if (cluster.isPrimary) {
+  jobs = new JobQueue();
+}
 
 // Return the list of all the videos that a logged in user has uploaded
 const getVideos = (req, res, handleErr) => {
@@ -74,21 +81,23 @@ const uploadVideo = async (req, res, handleErr) => {
 // Extract the audio for a video file (can only be done once per video)
 const extractAudio = async (req, res, handleErr) => {
   const videoId = req.params.get("videoId");
-
+  console.log("we have : ", videoId);
   DB.update();
   const video = DB.videos.find((video) => video.videoId === videoId);
 
   if (video.extractedAudio) {
+    console.log(`already extracted`);
     return handleErr({
       status: 400,
       message: "The audio has already been extracted for this video.",
     });
   }
 
-  try {
-    const originalVideoPath = `./storage/${videoId}/original.${video.extension}`;
-    const targetAudioPath = `./storage/${videoId}/audio.aac`;
+  const originalVideoPath = `./storage/${videoId}/original.${video.extension}`;
+  const targetAudioPath = `./storage/${videoId}/audio.aac`;
 
+  try {
+    // if this promise returs some bullshit then we goo in catch block
     await FF.extractAudio(originalVideoPath, targetAudioPath);
 
     video.extractedAudio = true;
@@ -109,28 +118,30 @@ const resizeVideo = async (req, res, handleErr) => {
   const videoId = req.body.videoId;
   const width = Number(req.body.width);
   const height = Number(req.body.height);
-
+  // mark the video as processing in the queue after the queue compelets the operation it will mark it as false, client will resise that the video is being marked false so we can access the resied video
   DB.update();
   const video = DB.videos.find((video) => video.videoId === videoId);
   video.resizes[`${width}x${height}`] = { processing: true };
-
-  const originalVideoPath = `./storage/${video.videoId}/original.${video.extension}`;
-  const targetVideoPath = `./storage/${video.videoId}/${width}x${height}.${video.extension}`;
-
-  try {
-    await FF.resize(originalVideoPath, targetVideoPath, width, height);
-
-    video.resizes[`${width}x${height}`].processing = false;
-    DB.save();
-
-    res.status(200).json({
-      status: "success",
-      message: "The video is now being processed!",
+  DB.save();
+  // throw every resize operation into a queue
+  if (cluster.isPrimary) {
+    jobs.enqueue({
+      type: "resize",
+      width,
+      height,
+      videoId,
     });
-  } catch (e) {
-    util.deleteFile(targetVideoPath);
-    return handleErr(e);
+  } else {
+    process.send({
+      messageType: "queue:resize",
+      data: { type: "resize", width, height, videoId },
+    });
   }
+
+  res.status(200).json({
+    status: "success",
+    message: "The video is now being processed!",
+  });
 };
 
 // Return a video asset to the client
